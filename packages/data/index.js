@@ -1,65 +1,49 @@
 const uncachedValue = {};
 const getProxyData = "@@ProxyData";
 
-function createImmutable(dataOrCache, immutableMethods, mutableMethods) {
-  const isObjectData = dataOrCache !== undefined;
-  let proxy;
-  if (!isObjectData) {
-    dataOrCache = {};
-  }
-
-  function getPlainObjectAccessor(propName) {
-    return function(value) {
-      if (!arguments.length) return dataOrCache[propName];
-      if (dataOrCache[propName] !== value) {
-        return createImmutable(
-          Object.assign({}, dataOrCache, { [propName]: value })
-        );
-      }
-      return proxy;
-    };
-  }
-
-  function getCustomObjectAccessor(propName) {
-    return function(...args) {
-      let result;
-      if (propName in immutableMethods) {
-        result = immutableMethods[propName](...args);
-        if (typeof result === "function") {
-          result = result(dataOrCache);
-        }
-        return result;
-      }
-
-      if (propName in mutableMethods) {
-        result = mutableMethods[propName](dataOrCache, ...args);
-        if (typeof result === "function") {
-          result(dataOrCache);
-        }
-        return createImmutable(dataOrCache, immutableMethods, mutableMethods);
-      }
-      throw new Error("No method named " + propName);
-    };
-  }
-
-  return (proxy = new Proxy(dataOrCache, {
+function createImmutable(
+  immutableMethods = {},
+  mutableMethods = {},
+  cache = {}
+) {
+  return new Proxy(cache, {
     get(target, propName) {
-      if (isObjectData) {
-        if (propName === getProxyData) return dataOrCache;
-        return getPlainObjectAccessor(propName);
-      }
-
       if (propName === getProxyData) {
         return {
           immutable: immutableMethods,
           mutable: mutableMethods,
-          cache: dataOrCache
+          cache
         };
       }
 
-      return getCustomObjectAccessor(propName);
+      if (propName in immutableMethods || propName in mutableMethods) {
+        return function(...args) {
+          let result;
+          if (propName in immutableMethods) {
+            result = immutableMethods[propName](...args);
+            if (typeof result === "function") {
+              result = result(cache);
+            }
+            return result;
+          }
+
+          if (propName in mutableMethods) {
+            result = mutableMethods[propName](cache, ...args);
+
+            if (result && typeof result.then === "function") {
+              return result.then(payload => {
+                return createImmutable(immutableMethods, mutableMethods, cache);
+              });
+            }
+            return createImmutable(immutableMethods, mutableMethods, cache);
+          }
+          return undefined;
+        };
+      }
+
+      return undefined;
     }
-  }));
+  });
 }
 
 module.exports = function(model) {
@@ -67,8 +51,17 @@ module.exports = function(model) {
   const dispatchQueue = [];
   let isDispatching;
 
-  function getState(mapper) {
+  function buildStateProxy(readOnly) {
     const cache = {};
+    const changes = {};
+    let disposed = false;
+
+    function onChange(prop, data) {
+      if (!changes[prop]) {
+        changes[prop] = [];
+      }
+      changes[prop].push(data);
+    }
 
     function $$get(propName, fromCache) {
       if (propName in cache) return cache[propName];
@@ -84,16 +77,37 @@ module.exports = function(model) {
       }
 
       return (cache[propName] = loader({
-        type: "get"
+        type: "get",
+        readOnly,
+        onChange(data) {
+          onChange(propName, data);
+        }
       }));
     }
 
-    const proxy = new Proxy(model, {
+    function dispose() {
+      disposed = true;
+    }
+
+    return new Proxy(model, {
       get(target, propName) {
         if (propName === "$$get") return $$get;
+        if (propName === "$$changes") return changes;
+        if (propName === "$$dispose") return dispose;
+
+        if (!readOnly && disposed) {
+          // prvent user accesses to disposed state
+          // no limitation for readonly state
+          throw new Error("State is already disposed");
+        }
+
         return $$get(propName, false);
       }
     });
+  }
+
+  function getState(mapper) {
+    const proxy = buildStateProxy(true);
 
     if (mapper) return mapper(proxy);
 
@@ -132,18 +146,22 @@ module.exports = function(model) {
 
   async function innerDispatch(action, args) {
     isDispatching = true;
+    let state;
+
     try {
-      let state;
       let actionResult = await action(...args);
       let hasChange = false;
 
       if (typeof actionResult === "function") {
-        actionResult = await actionResult((state = getState()), dispatch);
+        actionResult = await actionResult(
+          (state = buildStateProxy()),
+          dispatch
+        );
       }
 
       if (actionResult) {
         if (!state) {
-          state = getState();
+          state = buildStateProxy();
         }
 
         for (let propName in actionResult) {
@@ -180,11 +198,25 @@ module.exports = function(model) {
         }
       }
 
+      // detect change
+      const changes = state.$$changes;
+      for (let propName in changes) {
+        hasChange = true;
+
+        await model[propName]({
+          type: "set",
+          changes: changes[propName]
+        });
+      }
+
       if (hasChange) {
-        notify(state);
+        notify(buildStateProxy(true));
       }
     } finally {
       isDispatching = false;
+      if (state) {
+        state.$$dispose();
+      }
     }
 
     if (dispatchQueue.length) {

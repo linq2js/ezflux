@@ -111,26 +111,4 @@ describe("createStore", () => {
     expect(counter).toBe(1);
   });
 });
-
-describe("createImmutable", () => {
-  test("can get value from immutable object", () => {
-    const original = createImmutable({ counter: 0 });
-    expect(original.counter()).toBe(0);
-  });
-
-  test("can set value to immutable object", () => {
-    const original = createImmutable({ counter: 0 });
-    expect(original.counter(1).counter()).toBe(1);
-  });
-
-  test("immutable object should create cloned object if there is any change", () => {
-    const original = createImmutable({ counter: 0 });
-    expect(original.counter(1)).not.toBe(original);
-  });
-
-  test("immutable object should not create cloned object if there is no change", () => {
-    const original = createImmutable({ counter: 0 });
-    expect(original.counter(0)).toBe(original);
-  });
-});
 //# sourceMappingURL=index.test.js.map

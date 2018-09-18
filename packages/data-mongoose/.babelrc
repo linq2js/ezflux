@@ -1,0 +1,19 @@
+{
+  "plugins": [
+    "transform-object-rest-spread",
+    "transform-react-jsx",
+    "babel-polyfill"
+  ],
+  "env": {
+    "test": {
+      "plugins": [
+        "transform-object-rest-spread",
+        "transform-react-jsx"
+      ],
+      "presets": [
+        "env",
+        "jest"
+      ]
+    }
+  }
+}
