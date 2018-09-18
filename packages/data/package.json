@@ -1,6 +1,6 @@
 {
   "name": "@ezflux/data",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "FLUX architecture for server side",
   "main": "./dist/index.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/linq2js/@ezflux/data.git"
+    "url": "git+https://github.com/linq2js/@ezflux.git"
   },
   "keywords": [
     "functional",
@@ -22,9 +22,9 @@
   "author": "linq2js",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/linq2js/@ezflux/data/issues"
+    "url": "https://github.com/linq2js/@ezflux/issues"
   },
-  "homepage": "https://github.com/linq2js/@ezflux/data#readme",
+  "homepage": "https://github.com/linq2js/@ezflux#readme",
   "dependencies": {},
   "devDependencies": {
     "babel-cli": "^6.26.0",

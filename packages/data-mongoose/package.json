@@ -1,6 +1,6 @@
 {
   "name": "@ezflux/data-mongoose",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Provide handler creators for MongoDb",
   "main": "./dist/index.js",
   "scripts": {
