@@ -1,65 +1,68 @@
 const uncachedValue = {};
 const getProxyData = "@@ProxyData";
 
-export function createImmutable(dataOrCache, immutableMethods, mutableMethods) {
+function createImmutable(dataOrCache, immutableMethods, mutableMethods) {
   const isObjectData = dataOrCache !== undefined;
   let proxy;
   if (!isObjectData) {
     dataOrCache = {};
   }
+
+  function getPlainObjectAccessor(propName) {
+    return function(value) {
+      if (!arguments.length) return dataOrCache[propName];
+      if (dataOrCache[propName] !== value) {
+        return createImmutable(
+          Object.assign({}, dataOrCache, { [propName]: value })
+        );
+      }
+      return proxy;
+    };
+  }
+
+  function getCustomObjectAccessor(propName) {
+    return function(...args) {
+      let result;
+      if (propName in immutableMethods) {
+        result = immutableMethods[propName](...args);
+        if (typeof result === "function") {
+          result = result(dataOrCache);
+        }
+        return result;
+      }
+
+      if (propName in mutableMethods) {
+        result = mutableMethods[propName](dataOrCache, ...args);
+        if (typeof result === "function") {
+          result(dataOrCache);
+        }
+        return createImmutable(dataOrCache, immutableMethods, mutableMethods);
+      }
+      throw new Error("No method named " + propName);
+    };
+  }
+
   return (proxy = new Proxy(dataOrCache, {
     get(target, propName) {
       if (isObjectData) {
         if (propName === getProxyData) return dataOrCache;
+        return getPlainObjectAccessor(propName);
+      }
 
-        return function(value) {
-          if (!arguments.length) return dataOrCache[propName];
-          if (dataOrCache[propName] !== value) {
-            return createImmutable(
-              Object.assign({}, dataOrCache, { [propName]: value })
-            );
-          }
-          return proxy;
-        };
-      } else {
-        if (propName === getProxyData) {
-          return {
-            immutable: immutableMethods,
-            mutable: mutableMethods,
-            cache: dataOrCache
-          };
-        }
-
-        return function(value) {
-          if (!arguments.length) {
-            if (propName in immutableMethods) {
-              if (propName in dataOrCache) return dataOrCache[propName];
-              return (dataOrCache[propName] = immutableMethods[propName](
-                dataOrCache
-              ));
-            }
-            throw new Error("No immutable method named " + propName);
-          }
-
-          if (propName in mutableMethods) {
-            dataOrCache[propName] = mutableMethods[propName](
-              value,
-              dataOrCache
-            );
-            return createImmutable(
-              dataOrCache,
-              immutableMethods,
-              mutableMethods
-            );
-          }
-          throw new Error("No mutable method named " + propName);
+      if (propName === getProxyData) {
+        return {
+          immutable: immutableMethods,
+          mutable: mutableMethods,
+          cache: dataOrCache
         };
       }
+
+      return getCustomObjectAccessor(propName);
     }
   }));
 }
 
-export default function(model) {
+module.exports = function(model) {
   const subscribers = [];
   const dispatchQueue = [];
   let isDispatching;
@@ -202,4 +205,6 @@ export default function(model) {
     subscribe,
     dispatch
   };
-}
+};
+
+module.exports.createImmutable = createImmutable;

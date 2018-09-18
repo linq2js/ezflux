@@ -1,8 +1,8 @@
 {
   "name": "@ezflux/data",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "FLUX architecture for server side",
-  "main": "./index.js",
+  "main": "./dist/index.js",
   "scripts": {
     "test": "jest"
   },
